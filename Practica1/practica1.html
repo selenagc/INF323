@@ -1,0 +1,246 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Escena1</title>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+</head>
+<body>
+    <h2>Extincion de los Dinosaurios</h2>
+    <canvas id="webglcanvas" style="border: none;" width="500" height="500"></canvas>
+    <noscript><p><b>Lo siento, pero ésta página requiere JavaScript.</b></p></noscript>
+    
+    <script id="vs" type="vertex">
+        #version 300 es
+        layout(location = 0) in vec2 aVertices;
+        void main() {
+            gl_Position = vec4(aVertices, 0.0, 1.0);
+        }
+    </script>
+
+    <script id="fs" type="fragment">
+        #version 300 es
+        precision mediump float;
+        uniform vec4 uColor;
+        out vec4 color;
+        void main() {
+            color = uColor;
+        }
+    </script>
+
+    <script>
+        "use strict";
+
+        /* Variables globales */
+        var programaID;
+        var gl;
+        var triangulos = [];
+        var uColor;
+
+        const colores = {
+            rojo: [1, 0, 0, 1],
+            verde: [0, 1, 0, 1],
+            azul: [0, 0, 1, 1],
+            amarillo: [1, 1, 0, 1],
+            blanco: [1, 1, 1, 1],
+            negro: [0, 0, 0, 1],
+            cyan: [0, 1, 1, 1],  // Azul verdoso
+            magenta: [1, 0, 1, 1],  // Rosa fuerte
+            naranja: [1, 0.647, 0, 1],  // Naranja
+            rosa: [1, 0.41, 0.71, 1],  // Rosa suave
+            gris: [0.5, 0.5, 0.5, 1],  // Gris
+            morado: [0.5, 0, 0.5, 1],  // Morado
+            aqua: [0, 1, 1, 1],  // Aqua
+
+            verdeClaro: [0.5, 1, 0.5, 1],  // Verde claro
+            amarilloClaro: [1, 1, 0.5, 1],  // Amarillo claro
+            naranjaClaro: [1, 0.8, 0.2, 1],  // Naranja claro
+            verdeOscuro: [0, 0.5, 0, 1],  // Verde oscuro
+            azulClaro: [0.5, 0.5, 1, 1],  // Azul claro
+             // Marrones
+            marronOscuro: [0.4, 0.2, 0.1, 1],  // Marrón oscuro
+            marron: [0.6, 0.3, 0.2, 1],  // Marrón medio
+            marronClaro: [0.8, 0.5, 0.3, 1],  // Marrón claro
+            marronRojizo: [0.7, 0.2, 0.1, 1],  // Marrón rojizo
+            marronVerde: [0.4, 0.3, 0.2, 1],  // Marrón verdoso
+
+            // Verdes
+            verdeOscuro: [0, 0.5, 0, 1],  // Verde oscuro
+            verdeBosque: [0.13, 0.55, 0.13, 1],  // Verde bosque
+            verde: [0, 1, 0, 1],  // Verde
+            verdeClaro: [0.5, 1, 0.5, 1],  // Verde claro
+            verdeLima: [0.75, 1, 0.25, 1],  // Verde lima
+            verdePastel: [0.47, 0.77, 0.47, 1],  // Verde pastel
+            verdeOliva: [0.5, 0.5, 0, 1],  // Verde oliva
+            verdeMenta: [0.55, 1, 0.41, 1],  // Verde menta
+            verdeAzulado: [0.0, 0.5, 0.5, 1],  // Verde azulado
+
+            // Azules
+            azulOscuro: [0, 0, 0.5, 1],  // Azul oscuro
+            azul: [0, 0, 1, 1],  // Azul
+            azulClaro: [0.5, 0.5, 1, 1],  // Azul claro
+            azulCielo: [0.53, 0.81, 0.98, 1],  // Azul cielo
+            azulMarino: [0.0, 0.0, 0.5, 1],  // Azul marino
+            azulTurquesa: [0.24, 0.77, 0.76, 1],  // Azul turquesa
+            azulPastel: [0.68, 0.85, 0.9, 1],  // Azul pastel
+            azulPavoReal: [0.0, 0.68, 0.85, 1],  // Azul pavo real
+
+            // Celestes
+            celeste: [0.0, 1, 1, 1],  // Celeste
+            celesteClaro: [0.5, 1, 1, 1],  // Celeste claro
+            azulCeleste: [0.68, 1, 0.91, 1],  // Azul celeste
+            aqua: [0, 1, 1, 1],  // Aqua
+            cieloClaro: [0.53, 0.81, 0.92, 1],  // Cielo claro
+            turquesaClaro: [0.25, 0.88, 0.82, 1],  // Turquesa claro
+
+
+        };
+
+        function compilaEnlazaLosShaders() {
+            var shaderDeVertice = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(shaderDeVertice, document.getElementById("vs").text.trim());
+            gl.compileShader(shaderDeVertice);
+            if (!gl.getShaderParameter(shaderDeVertice, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shaderDeVertice));
+            }
+
+            var shaderDeFragmento = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(shaderDeFragmento, document.getElementById("fs").text.trim());
+            gl.compileShader(shaderDeFragmento);
+            if (!gl.getShaderParameter(shaderDeFragmento, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shaderDeFragmento));
+            }
+
+            programaID = gl.createProgram();
+            gl.attachShader(programaID, shaderDeVertice); 
+            gl.attachShader(programaID, shaderDeFragmento);
+            gl.linkProgram(programaID);
+            if (!gl.getProgramParameter(programaID, gl.LINK_STATUS)) {
+                console.error(gl.getProgramInfoLog(programaID));
+            }
+
+            gl.useProgram(programaID);
+        }
+
+        class Triangulo {
+            constructor(gl, vertices, color) {
+                this.color = color;
+                this.numVertices = vertices.length / 2;
+
+                this.trianguloVAO = gl.createVertexArray();
+                gl.bindVertexArray(this.trianguloVAO);
+
+                var codigoVertices = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+                gl.enableVertexAttribArray(0);
+                gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+                gl.bindVertexArray(null);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            }
+
+            dibuja(gl, uColor) {
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.uniform4f(uColor, this.color[0], this.color[1], this.color[2], this.color[3]);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.numVertices);
+                gl.bindVertexArray(null);
+            }
+        }
+
+        function dibuja() {
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            for (let triangulo of triangulos) {
+                triangulo.dibuja(gl, uColor);
+            }
+        }
+
+        function main() {
+            var canvas = document.getElementById("webglcanvas");
+            gl = canvas.getContext("webgl2");
+
+            if (!gl) {
+                document.write("WebGL 2.0 no está disponible en tu navegador");
+                return;
+            }
+
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            compilaEnlazaLosShaders();
+
+            var datosTriangulos = [
+                //montañas del fondo
+                { vertices: [-1,-0.2,-0.65317,0.27865,-0.26847,-0.1545], color: colores.celesteClaro },
+                { vertices: [0.12478,-0.17444,0.44963,0.22165,0.7232,-0.21149], color: colores.azulCeleste },
+                { vertices: [0.3214,-0.1659,0.7289,0.23305,0.95687,-0.19724], color: colores.celesteClaro },
+                //montañas del frente
+                { vertices: [-0.62746,-0.14154,-0.28669,0.28281,-0.23847,-0.12225,0.00585,0.53999,0.24053,-0.12225,0.26947,0.26352,0.51057,-0.1319], color: colores.marronClaro},
+                { vertices: [-0.25776,-0.09975,-0.20953,0.31174,0.25661,0.26995,0.01871,0.44355,], color: colores.marron},
+                { vertices: [-0.32205,-0.11904,-0.40885,0.15422,-0.1806,-0.09654,-0.20953,0.25066,-0.00057,-0.10296,-0.00379,0.0642,0.13123,-0.08368,0.07979,0.22816,0.32412,-0.11904,0.24375,0.21851], color: colores.marronOscuro },
+                { vertices: [-0.68736,-0.17729,-0.61897,-0.09466,-0.56768,-0.17729,-0.4537,-0.03196,-0.43375,-0.16875,-0.34541,-0.04906,-0.33401,-0.1545,-0.23427,-0.16875], color: colores.marronVerde },
+                { vertices: [0.6,-0.2,0.53797,-0.04621,0.41829,-0.17444,0.45533,0.04213,0.28151,-0.16305,0.17607,-0.05761,0.11053,-0.17159], color: colores.marronRojizo },
+                //arbol 1 
+                { vertices: [-0.72515,-0.2236,-0.72215,-0.08102,-0.67638,-0.22134,-0.68238,-0.07802], color: colores.marronRojizo },
+                { vertices: [-0.72215,-0.08927,-0.76943,-0.04425,-0.66962,-0.08927,-0.75,0,-0.63285,-0.04575,-0.75217,0.03979,-0.65,0,-0.72966,0.06231,-0.65086,0.03679,-0.75,0.1,-0.67863,0.06681,-0.70114,0.13134,-0.65687,0.09982], color: colores.verdeBosque },
+                { vertices: [-0.72065,-0.07877,-0.70714,-0.03825,-0.67338,-0.07652,-0.74166,-0.00298,-0.67713,-0.01123,-0.72515,0.03079,-0.67263,0.03004,-0.71765,0.09382,-0.68538,0.06005], color: colores.verdeOscuro },
+                //arbol 2 
+                { vertices: [-0.2046,-0.17387,-0.20516,-0.11016,-0.17303,-0.16992,-0.17415,-0.11072], color: colores.marron },
+                { vertices: [-0.56264,-0.10367,-0.59864,-0.07019,-0.51786,-0.10409,-0.57897,-0.03126,-0.48647,-0.07019,-0.5865,0.00222,-0.50489,-0.03294,-0.56516,0.01938,-0.50196,-0.00406,-0.58357,0.05245,-0.5233,0.01896,-0.54465,0.07798,-0.50656,0.04868], color: colores.verdeBosque },
+                { vertices: [-0.55511,-0.09195,-0.58525,-0.06475,-0.52581,-0.08693,-0.55888,-0.04298,-0.50112,-0.06349,-0.5752,-0.00364,-0.52414,-0.04005,-0.55469,0.01394,-0.51995,-0.00531,-0.56892,0.04952,-0.53293,0.01519,-0.54297,0.06165,-0.5233,0.04533], color: colores.verdeOscuro },
+                //arbol 3 
+                { vertices: [-0.56204,-0.19303,-0.55865,-0.09606,-0.5299,-0.19191,-0.52764,-0.09324], color: colores.marronRojizo },
+                { vertices: [-0.21151,-0.11499,-0.24652,-0.07949,-0.16551,-0.11649,-0.23002,-0.04149,-0.13251,-0.07949,-0.23852,-0.00649,-0.15501,-0.04149,-0.21451,0.01201,-0.14851,-0.00949,-0.23202,0.04502,-0.17001,0.01201,-0.19301,0.07102,-0.15251,0.04302], color: colores.verdeBosque },
+                { vertices: [-0.20851,-0.10949,-0.19851,-0.07049,-0.16851,-0.10549,-0.22852,-0.04149,-0.19051,-0.05699,-0.19201,-0.02099,-0.19201,-0.02099,-0.15201,-0.01549,-0.21251,0.01301,-0.22602,0.04352,-0.19051,0.03302,-0.19001,0.00501], color: colores.verdeOscuro },
+                //arbol 4 
+                { vertices: [0.33493,-0.20035,0.34,-0.08,0.38,-0.2,0.37268,-0.08107], color: colores.marronOscuro },
+                { vertices: [0.33607,-0.08397,0.29446,-0.0473,0.38632,-0.08108,0.31588,-0.00569,0.4234,-0.04895,0.30764,0.03303,0.40116,-0.00611,0.33236,0.05569,0.40363,0.02808,0.31217,0.09276,0.38097,0.0528,0.35749,0.12201,0.39951,0.08782], color: colores.verdeOscuro },
+                { vertices: [0.34225,-0.07078,0.30847,-0.04401,0.37973,-0.06872,0.33195,-0.01311,0.41104,-0.04483,0.32783,0.02438,0.38303,-0.01435,0.34678,0.04909,0.39044,0.02232,0.33483,0.08617,0.36861,0.04786,0.35955,0.11253,0.38468,0.08287], color: colores.verdeBosque },
+                //arbol 5 
+                { vertices: [0.61683,-0.22085,0.62801,-0.13512,0.66388,-0.22271,0.65457,-0.12347,0.62708,-0.10996,0.64152,-0.07688,0.62801,-0.07455,0.64,-0.06,0.62847,-0.05544], color: colores.marronOscuro },
+                { vertices: [0.6937,-0.08946,0.68672,-0.0848,0.68299,-0.11042,0.67926,-0.10344,0.6541,-0.12161,0.64851,-0.10344,0.62941,-0.13093,0.62614,-0.11275,0.60844,-0.11555,0.6,-0.1,0.59027,-0.10204,0.59306,-0.08666,0.58561,-0.08899], color: colores.marronOscuro },
+                { vertices: [0.54038,-0.09215,0.50491,-0.03616,0.57516,-0.05667,0.53099,0.00697,0.62906,-0.05807,0.56716,0.00732,0.69375,-0.08867,0.59081,0.05879,0.74557,-0.06711,0.64228,0.07513,0.64228,0.07513,0.65202,0.00349,0.68158,0.05148,0.69723,0.01671,0.71218,-0.01633,0.75705,-0.00416,0.72123,0.02366,0.58837,-0.08971,0.54038,-0.09215], color: colores.verdeBosque },
+                { vertices: [0.55673,-0.0765,0.52369,-0.02224,0.58246,-0.07372,0.5529,-0.00451,0.62,-0.04,0.58038,-0.00625,0.67184,-0.04381,0.59046,0.04209,0.59046,0.04209,0.69375,-0.03059,0.64437,0.05427,0.73201,-0.04311,0.68367,-0.04172,0.70279,-0.06815,   0.63672,-0.05285,0.71253,-0.07267,0.61898,0.05253], color: colores.verdeOscuro },
+                //pasto
+                { vertices: [-1,-1,-1,-0.2,-0.8,-1,-0.7373,-0.18825,-0.6,-1,-0.57108,-0.17753,-0.4,-1,-0.19845,-0.15072,0,-1,0.35917,-0.17485,0.4,-1,0.65943,-0.2097,1,-1,1,-0.2], color: colores.verde },
+                { vertices: [-1.00326,-0.45341,-1.00527,-0.22983,-0.83809,-0.43931,-0.85622,-0.26206,-0.6548,-0.49772,-0.69912,-0.21574,-0.4272,-0.53397,-0.50777,-0.19761,-0.27413,-0.56016,-0.35671,-0.34666,-0.26406,-0.17545,-0.10695,-0.16337,-0.31844,-0.34263,-0.13918,-0.41111,-0.20766,-0.53599,-0.27413,-0.56016], color: colores.verdeClaro },
+                { vertices: [-1,-0.6,-1.00527,-0.45945,-0.85018,-0.58634,-0.82802,-0.47355,-0.4272,-0.63871,-0.43325,-0.53599,-0.2701,-0.65684,-0.28017,-0.56016,-0.2137,-0.64878,-0.20162,-0.51786], color: colores.marronClaro },
+                
+                { vertices: [-0.00826,-0.24998,0.12266,-0.17344,0.26366,-0.32651,0.37041,-0.19559,0.55974,-0.40708,0.77324,-0.22379,0.70476,-0.37485,1.00084,-0.24796,0.9948,-0.45744], color: colores.verdeClaro },
+                { vertices: [0.57182,-0.51383,0.55974,-0.40708,0.70879,-0.4957,0.70476,-0.37485,0.99883,-0.55412,0.9948,-0.45744], color: colores.marronClaro },
+                //rio
+                { vertices: [-1,-1,-1.00124,-0.56821,-0.8,-1,-0.26406,-0.65482,-0.6,-1,-0.20967,-0.64677,0,-1,-0.20162,-0.54002,0.2,-1,-0.13112,-0.39902,0.4,-1,-0.10695,-0.15732,0.6,-1,-0.00221,-0.254,0.8,-1,0.57182,-0.51383,1,-1,0.70879,-0.4957,0.99883,-0.55412,,,,], color: colores.azulPavoReal },
+                { vertices: [-0.09487,-0.17747,-0.13716,-0.13114,-0.00423,-0.24796,-0.03645,-0.13315,0.08037,-0.19962,0.12871,-0.16941], color: colores.azulPavoReal },
+                //nubes
+                { vertices: [-0.42363,0.22311,-0.51799,0.22766,-0.46228,0.2811,-0.32926,0.23107,-0.43272,0.33453,-0.24171,0.2288,-0.36564,0.34135,-0.15644,0.2288,-0.32471,0.37091,-0.07799,0.22425,-0.24854,0.37205,-0.20192,0.32885,-0.11438,0.25608,-0.15644,0.31975], color: colores.azulPavoReal },
+                { vertices: [-0.01091,0.32544,0.03911,0.37205,0.04707,0.32316,0.0664,0.4198,0.11074,0.31975,0.13575,0.43345,0.16418,0.32998,0.16645,0.45732,0.21648,0.32089,0.24149,0.46073,0.2665,0.32885,0.28242,0.41526,0.32221,0.40275,0.2665,0.32885,0.35973,0.34931,0.3927,0.32203], color: colores.azulPavoReal },
+                { vertices: [-0.99195,0.38252,-0.975,0.42276,-0.93265,0.3797,-0.91994,0.43758,-0.87335,0.38534,-0.89099,0.46865,-0.80981,0.38111,-0.83311,0.48206,-0.76604,0.37899,-0.80416,0.50677,-0.7491,0.37828,-0.7251,0.50677,-0.71733,0.38111,-0.68909,0.46865,-0.6898,0.37546,-0.65097,0.45947,-0.65591,0.38181,-0.61073,0.40088,-0.63756,0.37758,-0.57543,0.37687], color: colores.azulPavoReal },
+                { vertices: [0.42533,0.44766,0.47456,0.49689,0.51012,0.45313,0.59766,0.44219,0.67425,0.57896,0.74536,0.45313,0.77819,0.54887,0.84657,0.47775,0.96693,0.54887,1.02164,0.47775], color: colores.azulPavoReal },
+                //asteroide
+                { vertices: [-0.44288,0.46416,-0.52251,0.56053,-0.35208,0.46771,-0.5844,0.68329,-0.3186,0.53923,-0.63817,0.77611,-0.31657,0.58792,-0.49817,0.72995,-0.3678,0.65539], color: colores.amarillo },
+                { vertices: [-0.4734,0.4959,-0.50739,0.56337,-0.4378,0.47024,-0.52759,0.60619,-0.3957,0.46771,-0.55,0.65,-0.36172,0.47532,-0.57628,0.68836,-0.33331,0.50879,-0.62194,0.7472,-0.32773,0.53771,-0.62701,0.76901,-0.32672,0.56713,-0.5844,0.75988,-0.33077,0.59807,-0.51136,0.72793,-0.34904,0.63713,-0.45,0.7,-0.39164,0.65793], color: colores.naranja },
+                { vertices: [-0.46394,0.52639,-0.4783,0.59323,-0.38678,0.51158,-0.4276,0.62195,-0.37422,0.54523,-0.36883,0.59144], color: colores.marronRojizo },
+                //Dinosaurio1
+                { vertices: [0.36681,-0.23882,0.36315,-0.22628,0.3877,-0.24247,0.39241,-0.21844,0.40703,-0.22889,0.39397,-0.26024,0.41017,-0.25136,0.40703,-0.27748,0.44047,-0.25449,0.43629,-0.30151,0.48227,-0.26285,0.45,-0.3,0.63796,-0.25972,0.48749,-0.2827], color: colores.azul },
+                { vertices: [0.4141,-0.30584,0.39747,-0.29627,0.40586,-0.2898,0.39762,-0.27891,0.42131,-0.29201,0.41793,-0.28082,,,], color: colores.azul },
+                { vertices: [0.44546,-0.35207,0.43584,-0.34584,0.45739,-0.35136,0.45187,-0.34406,0.47,-0.33,0.45774,-0.32946,0.45436,-0.2999,0.43495,-0.30311], color: colores.azul },
+                //Dino 2
+                { vertices: [-0.40711,-0.64604,-0.43208,-0.61502,-0.46462,-0.60745,-0.49791,-0.58475,-0.50698,-0.59232,-0.51985,-0.58248,-0.53649,-0.58929,-0.56146,-0.57265,-0.58794,-0.58324,-0.60686,-0.56054,-0.64922,-0.57265,-0.64166,-0.54692,-0.72186,-0.54314,-0.7,-0.5,-0.75969,-0.50607,-0.72337,-0.469,-0.7786,-0.45159,-0.67344,-0.41679,-0.77709,-0.40317,-0.60988,-0.4183,-0.76,-0.34,-0.59,-0.41,-0.73,-0.29,-0.54,-0.41,-0.67,-0.27,-0.52,-0.4,-0.61,-0.28,-0.46,-0.39,-0.49,-0.34,-0.43,-0.37,-0.45,-0.35,-0.42,-0.34,-0.44,-0.3,-0.42,-0.28,-0.46,-0.27,-0.44,-0.25,-0.48,-0.24,-0.5,-0.22,-0.53,-0.24,-0.53,-0.24,-0.53,-0.21,-0.56], color: colores.azul },
+                { vertices: [-0.64896,-0.42,-0.66,-0.41,-0.61,-0.4,-0.65,-0.45,-0.61,-0.46,-0.64,-0.5,-0.62,-0.49,-0.59,-0.5,,,,,], color: colores.azul },
+                { vertices: [-0.52,-0.49,-0.5583,-0.493,-0.55,-0.49,-0.55,-0.48,-0.58,-0.41,-0.54,-0.41,,,,,], color: colores.azul },
+
+                { vertices: [], color: colores.azul }
+                
+            ];
+
+            for (let data of datosTriangulos) {
+                triangulos.push(new Triangulo(gl, data.vertices, data.color));
+            }
+
+            gl.useProgram(programaID);
+            uColor = gl.getUniformLocation(programaID, "uColor");
+            gl.clearColor(0.0, 1, 1, 1);
+            dibuja();
+        }
+
+        window.onload = main;
+    </script>
+</body>
+</html>
