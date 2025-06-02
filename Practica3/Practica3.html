@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Carretera WebGL 2.0</title>
+</head>
+<body>
+  <h2>Carretera en WebGL 2.0</h2>
+  <canvas id="webglcanvas" width="500" height="500" style="border:1px solid black;"></canvas>
+
+  <!-- Vertex Shader -->
+  <script id="vs" type="x-shader/x-vertex">
+    #version 300 es
+    uniform mat4 uMatrizProyeccion;
+    uniform mat4 uMatrizModelo;
+    layout(location = 0) in vec2 aVertices;
+    void main() {
+      gl_Position = uMatrizProyeccion * uMatrizModelo * vec4(aVertices, 0.0, 1.0);
+    }
+  </script>
+
+  <!-- Fragment Shader -->
+  <script id="fs" type="x-shader/x-fragment">
+    #version 300 es
+    precision mediump float;
+    uniform vec4 uColor;
+    out vec4 color;
+    void main() {
+      color = uColor;
+    }
+  </script>
+
+  <!-- JavaScript -->
+  <script>
+    function toRadians(grados) {
+      return grados * Math.PI / 180;
+    }
+
+    function identidad(r) {
+      for (let i = 0; i < 16; i++) r[i] = 0;
+      r[0] = r[5] = r[10] = r[15] = 1;
+    }
+
+    function traslacion(m, tx, ty, tz) {
+      let t = [...m];
+      identidad(m);
+      m[12] = tx;
+      m[13] = ty;
+      m[14] = tz;
+      multiplica(m, t, m);
+    }
+
+    function escalacion(m, sx, sy, sz) {
+      let s = [...m];
+      identidad(m);
+      m[0] = sx;
+      m[5] = sy;
+      m[10] = sz;
+      multiplica(m, s, m);
+    }
+
+    function ortho(m, izq, der, abj, arr, cerca, lejos) {
+      identidad(m);
+      m[0] = 2 / (der - izq);
+      m[5] = 2 / (arr - abj);
+      m[10] = -2 / (lejos - cerca);
+      m[12] = -(der + izq) / (der - izq);
+      m[13] = -(arr + abj) / (arr - abj);
+      m[14] = -(lejos + cerca) / (lejos - cerca);
+    }
+
+    function multiplica(out, a, b) {
+      let r = new Array(16);
+      for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 4; j++) {
+          r[i + j * 4] = 0;
+          for (let k = 0; k < 4; k++) {
+            r[i + j * 4] += a[i + k * 4] * b[k + j * 4];
+          }
+        }
+      }
+      for (let i = 0; i < 16; i++) out[i] = r[i];
+    }
+
+    let gl, uColor, uMatrizModelo, uMatrizProyeccion;
+    let MatrizModelo = new Array(16);
+    let MatrizProyeccion = new Array(16);
+    let carreteraVAO, lineaVAO, autoVAO, carreteraHorizontalVAO, carreteraHorizontalInferiorVAO;
+
+    function crearAuto() {
+        let vertices = [
+            -0.5, -0.7,  // Vértice inferior izquierdo
+            0.5, -0.7,  // Vértice inferior derecho
+            0.5,  0.7,  // Vértice superior derecho
+            -0.5,  0.7   // Vértice superior izquierdo
+            ];
+      autoVAO = crearVAO(vertices);
+    }
+
+    function crearVAO(vertices) {
+      let vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      let buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      return vao;
+    }
+
+    function carretera() {
+      let vertices = [
+        -9,  9, -9, -9,
+        -7, -9, -7,  9
+      ];
+      carreteraVAO = crearVAO(vertices);
+    }
+
+    function lineaBlanca() {
+      let vertices = [
+        0, 0, 0.2, 0,
+        0.2, 1, 0, 1
+      ];
+      lineaVAO = crearVAO(vertices);
+    }
+
+    function carreteraHorizontal() {
+      let vertices = [
+        -9, 9, -7, 9, -7, 7, -9, 7,
+         7, 9,  9, 9,  9, 7,  7, 7
+      ];
+      carreteraHorizontalVAO = crearVAO(vertices);
+    }
+
+    function carreteraHorizontalInferior() {
+      let vertices = [
+        -9, -9, -7, -9, -7, -7, -9, -7,
+         7, -9,  9, -9,  9, -7,  7, -7
+      ];
+      carreteraHorizontalInferiorVAO = crearVAO(vertices);
+    }
+
+    let xAuto = -8;
+    let yAuto = 8;
+    let estadoAuto = "derecha"; // derecha → abajo → izquierda → arriba
+    let velocidad = 0.05;
+
+    function dibuja() {
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // Carreteras verticales
+      gl.bindVertexArray(carreteraVAO);
+      identidad(MatrizModelo);
+      gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+      gl.uniform4f(uColor, 0, 0, 0, 1);
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+      identidad(MatrizModelo);
+      traslacion(MatrizModelo, 16, 0, 0);
+      gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+
+      // Líneas blancas
+      gl.bindVertexArray(lineaVAO);
+      let posiciones = [-8.1, -7.3, 7.3, 8.1];
+      for (let x of posiciones) {
+        for (let y = 8; y > -9; y -= 1.5) {
+          identidad(MatrizModelo);
+          traslacion(MatrizModelo, x, y, 0);
+          gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+          gl.uniform4f(uColor, 1, 1, 1, 1);
+          gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+        }
+      }
+
+      // Carreteras horizontales superior e inferior
+      gl.bindVertexArray(carreteraHorizontalVAO);
+      identidad(MatrizModelo);
+      gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+      gl.uniform4f(uColor, 0, 0, 0, 1);
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, 8);
+
+      gl.bindVertexArray(carreteraHorizontalInferiorVAO);
+      identidad(MatrizModelo);
+      gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+      gl.uniform4f(uColor, 0, 0, 0, 1);
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, 8);
+
+      // Auto
+      gl.bindVertexArray(autoVAO);
+      identidad(MatrizModelo);
+      traslacion(MatrizModelo, xAuto, yAuto, 0);
+      escalacion(MatrizModelo, 1, 0.6, 1);
+      gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+      gl.uniform4f(uColor, 1, 0, 0, 1);
+      gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+
+      // Movimiento del auto
+      if (estadoAuto === "derecha") {
+        xAuto += velocidad;
+        if (xAuto >= 8) estadoAuto = "abajo";
+      } else if (estadoAuto === "abajo") {
+        yAuto -= velocidad;
+        if (yAuto <= -8) estadoAuto = "izquierda";
+      } else if (estadoAuto === "izquierda") {
+        xAuto -= velocidad;
+        if (xAuto <= -8) estadoAuto = "arriba";
+      } else if (estadoAuto === "arriba") {
+        yAuto += velocidad;
+        if (yAuto >= 8) estadoAuto = "derecha";
+      }
+
+      requestAnimationFrame(dibuja);
+    }
+
+    function main() {
+      let canvas = document.getElementById("webglcanvas");
+      gl = canvas.getContext("webgl2");
+
+      let vs = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vs, document.getElementById("vs").text.trim());
+      gl.compileShader(vs);
+
+      let fs = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fs, document.getElementById("fs").text.trim());
+      gl.compileShader(fs);
+
+      let prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      gl.useProgram(prog);
+
+      uColor = gl.getUniformLocation(prog, "uColor");
+      uMatrizProyeccion = gl.getUniformLocation(prog, "uMatrizProyeccion");
+      uMatrizModelo = gl.getUniformLocation(prog, "uMatrizModelo");
+
+      ortho(MatrizProyeccion, -10, 10, -10, 10, -1, 1);
+      gl.uniformMatrix4fv(uMatrizProyeccion, false, MatrizProyeccion);
+      gl.clearColor(1, 1, 1, 1);
+
+      crearAuto();
+      carretera();
+      lineaBlanca();
+      carreteraHorizontal();
+      carreteraHorizontalInferior();
+
+      dibuja();
+    }
+
+    window.onload = main;
+  </script>
+</body>
+</html>
