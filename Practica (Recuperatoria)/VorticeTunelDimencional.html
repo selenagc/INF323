@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vórtice Dimensional - Sistema de Partículas WebGL2</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            background: radial-gradient(circle, #001122 0%, #000000 100%);
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+        }
+        input[type="range"] {
+            width: 150px;
+        }
+        .info {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="controls">
+        <div class="control-group">
+            <label>Partículas:</label>
+            <input type="range" id="particleCount" min="1000" max="50000" value="10000" step="1000">
+            <span id="particleCountValue">10000</span>
+        </div>
+        <div class="control-group">
+            <label>Velocidad:</label>
+            <input type="range" id="speed" min="0.1" max="5.0" value="1.0" step="0.1">
+            <span id="speedValue">1.0</span>
+        </div>
+        <div class="control-group">
+            <label>Fuerza Vórtice:</label>
+            <input type="range" id="vortexStrength" min="0.1" max="10.0" value="2.0" step="0.1">
+            <span id="vortexStrengthValue">2.0</span>
+        </div>
+        <div class="control-group">
+            <label>Tamaño:</label>
+            <input type="range" id="particleSize" min="0.5" max="5.0" value="1.5" step="0.1">
+            <span id="particleSizeValue">1.5</span>
+        </div>
+        <div class="control-group">
+            <label>Esquema Color:</label>
+            <select id="colorScheme" style="width: 150px; padding: 2px;">
+                <option value="default">Azul Cósmico</option>
+                <option value="fire">Fuego</option>
+                <option value="ice">Hielo</option>
+                <option value="neon">Neón</option>
+                <option value="sunset">Atardecer</option>
+                <option value="forest">Bosque</option>
+                <option value="galaxy">Galaxia</option>
+                <option value="custom">Personalizado</option>
+            </select>
+        </div>
+        <div id="customColors" style="display: none;">
+            <div class="control-group">
+                <label>Rojo:</label>
+                <input type="range" id="redValue" min="0" max="255" value="51" step="1">
+                <span id="redValueText">51</span>
+            </div>
+            <div class="control-group">
+                <label>Verde:</label>
+                <input type="range" id="greenValue" min="0" max="255" value="102" step="1">
+                <span id="greenValueText">102</span>
+            </div>
+            <div class="control-group">
+                <label>Azul:</label>
+                <input type="range" id="blueValue" min="0" max="255" value="204" step="1">
+                <span id="blueValueText">204</span>
+            </div>
+        </div>
+    </div>
+    <!-- <div class="info">
+        Sistema de Partículas Vórtice Dimensional<br>
+        WebGL2 -INF323-SelenaGutierrez
+    </div> -->
+
+    <script>
+        // Configuración inicial
+        let canvas, gl, program;
+        let particleCount = 10000;
+        let particles = [];
+        let time = 0;
+        
+        // Buffers WebGL2
+        let positionBuffer, velocityBuffer, colorBuffer;
+        let vao;
+        
+        // Variables uniformes
+        let uniforms = {};
+        
+        // Parámetros del vórtice
+        let params = {
+            speed: 1.0,
+            vortexStrength: 2.0,
+            particleSize: 1.5,
+            colorScheme: 'default',
+            customColor: { r: 51, g: 102, b: 204 }
+        };
+
+        // Esquemas de colores predefinidos
+        const colorSchemes = {
+            default: { base: [0.2, 0.4, 0.8], variation: [0.8, 0.6, 0.2] },
+            fire: { base: [1.0, 0.3, 0.1], variation: [0.8, 0.7, 0.2] },
+            ice: { base: [0.1, 0.6, 1.0], variation: [0.4, 0.8, 0.9] },
+            neon: { base: [0.9, 0.1, 0.9], variation: [0.1, 0.9, 0.9] },
+            sunset: { base: [1.0, 0.5, 0.2], variation: [0.9, 0.3, 0.6] },
+            forest: { base: [0.2, 0.8, 0.3], variation: [0.4, 0.9, 0.1] },
+            galaxy: { base: [0.6, 0.2, 0.9], variation: [0.9, 0.4, 0.8] },
+            custom: { base: [0.2, 0.4, 0.8], variation: [0.8, 0.6, 0.2] }
+        };
+
+        // Vertex Shader
+        const vertexShaderSource = `#version 300 es
+            precision highp float;
+            
+            in vec2 a_position;
+            in vec2 a_velocity;
+            in vec3 a_color;
+            
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            uniform float u_particleSize;
+            
+            out vec3 v_color;
+            out float v_alpha;
+            
+            void main() {
+                vec2 pos = a_position;
+                
+                // Convertir a coordenadas normalizadas
+                vec2 clipSpace = (pos / u_resolution) * 2.0 - 1.0;
+                clipSpace.y *= -1.0;
+                
+                gl_Position = vec4(clipSpace, 0.0, 1.0);
+                gl_PointSize = u_particleSize;
+                
+                // Calcular alpha basado en la distancia al centro
+                float distanceFromCenter = length(pos - u_resolution * 0.5);
+                float maxDistance = length(u_resolution * 0.5);
+                v_alpha = 1.0 - (distanceFromCenter / maxDistance);
+                v_alpha = pow(v_alpha, 2.0);
+                
+                v_color = a_color;
+            }
+        `;
+
+        // Fragment Shader
+        const fragmentShaderSource = `#version 300 es
+            precision highp float;
+            
+            in vec3 v_color;
+            in float v_alpha;
+            
+            out vec4 fragColor;
+            
+            void main() {
+                // Crear punto circular con efecto de brillo
+                vec2 coord = gl_PointCoord - vec2(0.5);
+                float dist = length(coord);
+                
+                if (dist > 0.5) {
+                    discard;
+                }
+                
+                float alpha = 1.0 - (dist * 2.0);
+                alpha = pow(alpha, 3.0);
+                
+                // Efecto de brillo en el centro
+                float glow = 1.0 - dist;
+                glow = pow(glow, 4.0);
+                
+                vec3 finalColor = v_color + vec3(glow * 0.5);
+                fragColor = vec4(finalColor, alpha * v_alpha);
+            }
+        `;
+
+        // Inicializar WebGL2
+        function initGL() {
+            canvas = document.getElementById('canvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            gl = canvas.getContext('webgl2');
+            if (!gl) {
+                alert('WebGL2 no está soportado en este navegador');
+                return false;
+            }
+            
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            
+            return true;
+        }
+
+        // Crear shaders
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Error compilando shader:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            
+            return shader;
+        }
+
+        // Crear programa de shaders
+        function createProgram() {
+            const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+            const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+            
+            program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Error enlazando programa:', gl.getProgramInfoLog(program));
+                return false;
+            }
+            
+            // Obtener ubicaciones de uniforms
+            uniforms = {
+                time: gl.getUniformLocation(program, 'u_time'),
+                resolution: gl.getUniformLocation(program, 'u_resolution'),
+                particleSize: gl.getUniformLocation(program, 'u_particleSize')
+            };
+            
+            return true;
+        }
+
+        // Función para generar color basado en esquema
+        function generateParticleColor(scheme) {
+            const colors = colorSchemes[scheme];
+            if (scheme === 'custom') {
+                const base = [
+                    params.customColor.r / 255,
+                    params.customColor.g / 255,
+                    params.customColor.b / 255
+                ];
+                return {
+                    r: base[0] + (Math.random() - 0.5) * 0.4,
+                    g: base[1] + (Math.random() - 0.5) * 0.4,
+                    b: base[2] + (Math.random() - 0.5) * 0.4
+                };
+            }
+            
+            return {
+                r: colors.base[0] + Math.random() * colors.variation[0],
+                g: colors.base[1] + Math.random() * colors.variation[1],
+                b: colors.base[2] + Math.random() * colors.variation[2]
+            };
+        }
+
+        // Generar partículas
+        function generateParticles() {
+            particles = [];
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            for (let i = 0; i < particleCount; i++) {
+                // Distribución inicial en espiral
+                const angle = (i / particleCount) * Math.PI * 8;
+                const radius = Math.random() * Math.min(centerX, centerY) * 0.8;
+                
+                const particle = {
+                    x: centerX + Math.cos(angle) * radius,
+                    y: centerY + Math.sin(angle) * radius,
+                    vx: 0,
+                    vy: 0,
+                    life: Math.random(),
+                    size: Math.random() * 2 + 0.5,
+                    color: generateParticleColor(params.colorScheme)
+                };
+                
+                particles.push(particle);
+            }
+        }
+
+        // Actualizar partículas
+        function updateParticles(deltaTime) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                
+                // Calcular vector hacia el centro
+                const dx = centerX - p.x;
+                const dy = centerY - p.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    // Fuerza hacia el centro (atracción)
+                    const attraction = params.vortexStrength / (distance * 0.01 + 1);
+                    const attractionX = (dx / distance) * attraction;
+                    const attractionY = (dy / distance) * attraction;
+                    
+                    // Fuerza tangencial (rotación)
+                    const tangentialForce = params.vortexStrength * 0.5;
+                    const tangentialX = -dy / distance * tangentialForce;
+                    const tangentialY = dx / distance * tangentialForce;
+                    
+                    // Aplicar fuerzas
+                    p.vx += (attractionX + tangentialX) * deltaTime;
+                    p.vy += (attractionY + tangentialY) * deltaTime;
+                    
+                    // Fricción
+                    p.vx *= 0.95;
+                    p.vy *= 0.95;
+                    
+                    // Actualizar posición
+                    p.x += p.vx * params.speed * deltaTime * 60;
+                    p.y += p.vy * params.speed * deltaTime * 60;
+                    
+                    // Efecto de túnel dimensional - reiniciar partículas que llegan al centro
+                    if (distance < 20) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const spawnRadius = Math.min(centerX, centerY) * 0.9;
+                        p.x = centerX + Math.cos(angle) * spawnRadius;
+                        p.y = centerY + Math.sin(angle) * spawnRadius;
+                        p.vx = 0;
+                        p.vy = 0;
+                        p.life = Math.random();
+                        
+                        // Cambiar color gradualmente
+                        p.color = generateParticleColor(params.colorScheme);
+                    }
+                }
+                
+                // Mantener partículas dentro de los límites
+                if (p.x < 0 || p.x > canvas.width || p.y < 0 || p.y > canvas.height) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spawnRadius = Math.min(centerX, centerY) * 0.8;
+                    p.x = centerX + Math.cos(angle) * spawnRadius;
+                    p.y = centerY + Math.sin(angle) * spawnRadius;
+                    p.vx = 0;
+                    p.vy = 0;
+                }
+            }
+        }
+
+        // Configurar buffers
+        function setupBuffers() {
+            // Crear VAO
+            vao = gl.createVertexArray();
+            gl.bindVertexArray(vao);
+            
+            // Buffer de posiciones
+            positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(particleCount * 2), gl.DYNAMIC_DRAW);
+            
+            const positionLocation = gl.getAttribLocation(program, 'a_position');
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            // Buffer de velocidades
+            velocityBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, velocityBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(particleCount * 2), gl.DYNAMIC_DRAW);
+            
+            const velocityLocation = gl.getAttribLocation(program, 'a_velocity');
+            gl.enableVertexAttribArray(velocityLocation);
+            gl.vertexAttribPointer(velocityLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            // Buffer de colores
+            colorBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(particleCount * 3), gl.DYNAMIC_DRAW);
+            
+            const colorLocation = gl.getAttribLocation(program, 'a_color');
+            gl.enableVertexAttribArray(colorLocation);
+            gl.vertexAttribPointer(colorLocation, 3, gl.FLOAT, false, 0, 0);
+        }
+
+        // Actualizar buffers con datos de partículas
+        function updateBuffers() {
+            const positions = new Float32Array(particleCount * 2);
+            const velocities = new Float32Array(particleCount * 2);
+            const colors = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particles.length && i < particleCount; i++) {
+                const p = particles[i];
+                
+                positions[i * 2] = p.x;
+                positions[i * 2 + 1] = p.y;
+                
+                velocities[i * 2] = p.vx;
+                velocities[i * 2 + 1] = p.vy;
+                
+                colors[i * 3] = p.color.r;
+                colors[i * 3 + 1] = p.color.g;
+                colors[i * 3 + 2] = p.color.b;
+            }
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, velocityBuffer);
+            gl.bufferSubData(gl.ARRAY_BUFFER, 0, velocities);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+            gl.bufferSubData(gl.ARRAY_BUFFER, 0, colors);
+        }
+
+        // Renderizar
+        function render() {
+            gl.clearColor(0.0, 0.0, 0.1, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            
+            gl.useProgram(program);
+            gl.bindVertexArray(vao);
+            
+            // Actualizar uniforms
+            gl.uniform1f(uniforms.time, time);
+            gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
+            gl.uniform1f(uniforms.particleSize, params.particleSize);
+            
+            // Dibujar partículas
+            gl.drawArrays(gl.POINTS, 0, Math.min(particles.length, particleCount));
+        }
+
+        // Loop de animación
+        let lastTime = 0;
+        function animate(currentTime) {
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+            
+            time = currentTime / 1000;
+            
+            updateParticles(deltaTime);
+            updateBuffers();
+            render();
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Configurar controles
+        function setupControls() {
+            const controls = {
+                particleCount: document.getElementById('particleCount'),
+                speed: document.getElementById('speed'),
+                vortexStrength: document.getElementById('vortexStrength'),
+                particleSize: document.getElementById('particleSize'),
+                colorScheme: document.getElementById('colorScheme'),
+                redValue: document.getElementById('redValue'),
+                greenValue: document.getElementById('greenValue'),
+                blueValue: document.getElementById('blueValue')
+            };
+            
+            const values = {
+                particleCount: document.getElementById('particleCountValue'),
+                speed: document.getElementById('speedValue'),
+                vortexStrength: document.getElementById('vortexStrengthValue'),
+                particleSize: document.getElementById('particleSizeValue'),
+                redValue: document.getElementById('redValueText'),
+                greenValue: document.getElementById('greenValueText'),
+                blueValue: document.getElementById('blueValueText')
+            };
+            
+            const customColorsDiv = document.getElementById('customColors');
+            
+            controls.particleCount.addEventListener('input', (e) => {
+                const newCount = parseInt(e.target.value);
+                values.particleCount.textContent = newCount;
+                if (newCount !== particleCount) {
+                    particleCount = newCount;
+                    generateParticles();
+                    setupBuffers();
+                }
+            });
+            
+            controls.speed.addEventListener('input', (e) => {
+                params.speed = parseFloat(e.target.value);
+                values.speed.textContent = params.speed.toFixed(1);
+            });
+            
+            controls.vortexStrength.addEventListener('input', (e) => {
+                params.vortexStrength = parseFloat(e.target.value);
+                values.vortexStrength.textContent = params.vortexStrength.toFixed(1);
+            });
+            
+            controls.particleSize.addEventListener('input', (e) => {
+                params.particleSize = parseFloat(e.target.value);
+                values.particleSize.textContent = params.particleSize.toFixed(1);
+            });
+            
+            // Control de esquema de colores
+            controls.colorScheme.addEventListener('change', (e) => {
+                params.colorScheme = e.target.value;
+                
+                // Mostrar/ocultar controles personalizados
+                if (e.target.value === 'custom') {
+                    customColorsDiv.style.display = 'block';
+                } else {
+                    customColorsDiv.style.display = 'none';
+                }
+                
+                // Regenerar partículas con nuevos colores
+                updateParticleColors();
+            });
+            
+            // Controles RGB personalizados
+            controls.redValue.addEventListener('input', (e) => {
+                params.customColor.r = parseInt(e.target.value);
+                values.redValue.textContent = params.customColor.r;
+                if (params.colorScheme === 'custom') {
+                    updateParticleColors();
+                }
+            });
+            
+            controls.greenValue.addEventListener('input', (e) => {
+                params.customColor.g = parseInt(e.target.value);
+                values.greenValue.textContent = params.customColor.g;
+                if (params.colorScheme === 'custom') {
+                    updateParticleColors();
+                }
+            });
+            
+            controls.blueValue.addEventListener('input', (e) => {
+                params.customColor.b = parseInt(e.target.value);
+                values.blueValue.textContent = params.customColor.b;
+                if (params.colorScheme === 'custom') {
+                    updateParticleColors();
+                }
+            });
+        }
+        
+        // Función para actualizar colores de partículas existentes
+        function updateParticleColors() {
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].color = generateParticleColor(params.colorScheme);
+            }
+        }
+
+        // Redimensionar canvas
+        function handleResize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+
+        // Inicialización
+        function init() {
+            if (!initGL()) return;
+            
+            if (!createProgram()) return;
+            
+            generateParticles();
+            setupBuffers();
+            setupControls();
+            
+            window.addEventListener('resize', handleResize);
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Iniciar cuando la página cargue
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
